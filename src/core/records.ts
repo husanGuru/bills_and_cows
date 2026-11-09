@@ -1,28 +1,65 @@
+import { getAttempts } from './game';
+import { BASES } from './settings';
 import type { GameSettings, GameState, RecordEntry } from './types';
 
-export const compareRecords = (_a: RecordEntry, _b: RecordEntry): number => {
-  throw new Error('Not implemented');
+const isSameSettings =
+  (settings: GameSettings) =>
+  (record: RecordEntry): boolean =>
+    record.length === settings.length && record.base === settings.base;
+
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const isRecordEntry = (value: unknown): value is RecordEntry => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const { length, base, attempts, timeMs, date } = value as Record<string, unknown>;
+
+  return [length, attempts, timeMs, date].every(isNumber) && BASES.some((known) => known === base);
 };
 
-export const createRecord = (_state: GameState): RecordEntry | null => {
-  throw new Error('Not implemented');
+export const compareRecords = (a: RecordEntry, b: RecordEntry): number =>
+  a.attempts - b.attempts || a.timeMs - b.timeMs;
+
+export const createRecord = (state: GameState): RecordEntry | null => {
+  if (state.status !== 'won' || state.finishedAt === null) {
+    return null;
+  }
+  return {
+    length: state.settings.length,
+    base: state.settings.base,
+    attempts: getAttempts(state),
+    timeMs: state.finishedAt - state.startedAt,
+    date: state.finishedAt,
+  };
 };
 
 export const getRecordsFor = (
-  _records: readonly RecordEntry[],
-  _settings: GameSettings,
-): readonly RecordEntry[] => {
-  throw new Error('Not implemented');
-};
+  records: readonly RecordEntry[],
+  settings: GameSettings,
+): readonly RecordEntry[] => records.filter(isSameSettings(settings));
 
 export const addRecord = (
-  _records: readonly RecordEntry[],
-  _entry: RecordEntry,
-  _limit: number,
+  records: readonly RecordEntry[],
+  entry: RecordEntry,
+  limit: number,
 ): readonly RecordEntry[] => {
-  throw new Error('Not implemented');
+  const sameSettings = isSameSettings(entry);
+  const others = records.filter((record) => !sameSettings(record));
+  const best = [...records.filter(sameSettings), entry].sort(compareRecords).slice(0, limit);
+
+  return [...others, ...best];
 };
 
-export const parseRecords = (_raw: string | null): readonly RecordEntry[] => {
-  throw new Error('Not implemented');
+export const parseRecords = (raw: string | null): readonly RecordEntry[] => {
+  if (raw === null) {
+    return [];
+  }
+  try {
+    const data: unknown = JSON.parse(raw);
+    return Array.isArray(data) ? data.filter(isRecordEntry) : [];
+  } catch {
+    return [];
+  }
 };
